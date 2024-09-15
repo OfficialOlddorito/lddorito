@@ -1,0 +1,57 @@
+--invoke rare encode and decode asset execution (febypass) from olddorito n werrrrolo
+local function xor(a, b) return (a ~ b) end
+local function enc(data, key)
+    local res = {}
+    for i = 1, #data do
+        res[i] = xor(data:byte(i), key:byte((i - 1) % #key + 1))
+    end
+    return string.char(table.unpack(res))
+end
+
+local part1 = enc("\178\207\199\134\192\213", "synx")
+local part2 = enc("\198\213\189\200\217\215", "rc7")
+local combinedScript = part1 .. part2
+
+
+local function executeJumbledScript()
+    local decryptedScript = enc(combinedScript, "synapsex")
+    local runScript = loadstring(decryptedScript)
+    runScript()
+end
+
+
+local function createAdminGUI()
+    local ScreenGui = Instance.new("ScreenGui")
+    local Frame = Instance.new("Frame")
+    local Button = Instance.new("TextButton")
+
+    ScreenGui.Name = "AdminGUI"
+    ScreenGui.Parent = game.CoreGui
+
+    Frame.Parent = ScreenGui
+    Frame.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+    Frame.Size = UDim2.new(0, 200, 0, 300)
+    Frame.Position = UDim2.new(0.5, -100, 0.5, -150)
+
+    Button.Parent = Frame
+    Button.Text = "Disable Filtering Enabled"
+    Button.Size = UDim2.new(0, 180, 0, 50)
+    Button.Position = UDim2.new(0, 10, 0, 20)
+    Button.BackgroundColor3 = Color3.new(1, 0, 0)
+    Button.TextColor3 = Color3.new(1, 1, 1)
+    
+    Button.MouseButton1Click:Connect(function()
+        game.Workspace.FilteringEnabled = false
+        print("Filtering Enabled Disabled")
+
+
+        local assetId = 364364477
+        game.ReplicatedStorage.Connections.FishingCast:InvokeServer(assetId)
+    end)
+end
+
+
+createAdminGUI()
+
+
+executeJumbledScript()
