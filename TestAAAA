@@ -5,7 +5,14 @@ LocalScript2.Parent = game:GetService("StarterPlayer").StarterPlayerScripts
 -- Load necessary services and modules
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local AtomicBinding = require(script:WaitForChild("AtomicBinding"))
+
+-- Load AtomicBinding if available
+local AtomicBinding = script:FindFirstChild("AtomicBinding")
+if AtomicBinding then
+    AtomicBinding = require(AtomicBinding)
+else
+    warn("AtomicBinding module not found!")
+end
 
 -- Function to load a user settings flag
 local function loadFlag(flag: string)
