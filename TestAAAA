@@ -1,85 +1,97 @@
-local LocalScript2 = Instance.new("LocalScript")
-LocalScript2.Name = "RbxCharacterSounds"
-LocalScript2.Parent = game:GetService("StarterPlayer").StarterPlayerScripts
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 
--- AtomicBinding and BindableEvent setup
-local AtomicBinding = script:FindFirstChild("AtomicBinding")
-if AtomicBinding then
-    AtomicBinding = require(AtomicBinding)
-else
-    warn("AtomicBinding module not found!")
+-- Define AtomicBinding Module
+local AtomicBinding = {}
+AtomicBinding.__index = AtomicBinding
+
+function AtomicBinding.new(manifest, boundFn)
+    local self = setmetatable({
+        _boundFn = boundFn,
+        _manifest = manifest,
+        _connections = {},
+        _resolved = {},
+    }, AtomicBinding)
+    return self
 end
 
-local soundEvent = Instance.new("BindableEvent")
-soundEvent.Name = "SoundPlayed"
-soundEvent.Parent = script
-
--- Flag and sound loading function
-local function loadFlag(flag)
-    local success, result = pcall(function()
-        return UserSettings():IsUserFeatureEnabled(flag)
-    end)
-    return success and result
+function AtomicBinding:bindRoot(root)
+    -- Bind the root part and resolve the manifest for sound playing
+    for alias, instanceName in pairs(self._manifest) do
+        local instance = root:FindFirstChild(instanceName)
+        if instance then
+            self._resolved[alias] = instance
+        end
+    end
+    self:_startBoundFn(root, self._resolved)
 end
 
-local settingsFlag = "UserFeatureFlag"
-if not loadFlag(settingsFlag) then
-    warn("Failed to load the settings flag:", settingsFlag)
+function AtomicBinding:_startBoundFn(root, resolved)
+    local boundFn = self._boundFn
+    local dtor = boundFn(resolved)
+    if dtor then
+        self._connections[root] = dtor
+    end
 end
 
--- Load sound
-local function loadSound(assetId)
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://" .. tostring(assetId)
-    sound.Looped = false
-    sound.Volume = 1
-    sound.Parent = workspace
-    return sound
+function AtomicBinding:unbindRoot(root)
+    if self._connections[root] then
+        self._connections[root]()
+        self._connections[root] = nil
+    end
 end
 
-local sound = loadSound(17231958102)
-
--- Initialize sound system
+-- Function to initialize sound system with AtomicBinding
 local function initializeSoundSystem(instances)
     local player = instances.player
     local humanoid = instances.humanoid
     local rootPart = instances.rootPart
-    local sounds = {}
 
     local SOUND_DATA = {
-        ["Jumping"] = {SoundId = "rbxassetid://YourSoundId", Volume = 1},
+        ["Jumping"] = { SoundId = "rbxassetid://YourSoundId", Volume = 1 },
     }
 
+    local sounds = {}
     for name, props in pairs(SOUND_DATA) do
         local sound = Instance.new("Sound")
-        sound.Name = name
-        sound.Archivable = false
-        sound.RollOffMinDistance = 5
-        sound.RollOffMaxDistance = 150
-        sound.Volume = 0.65
-        for propName, propValue in pairs(props) do
-            sound[propName] = propValue
-        end
+        sound.SoundId = props.SoundId
+        sound.Volume = props.Volume
         sound.Parent = rootPart
         sounds[name] = sound
     end
 
-    -- Play sounds on state transition using BindableEvent
-    soundEvent.Event:Connect(function(state)
+    -- Define state transitions
+    local function playSoundForState(state)
         if state == Enum.HumanoidStateType.Jumping then
-            sounds.Jumping:Play()
+            sounds["Jumping"]:Play()
+        end
+    end
+
+    -- Bind state changes using AtomicBinding
+    local binding = AtomicBinding.new({
+        humanoid = "Humanoid",
+        rootPart = "HumanoidRootPart"
+    }, function(resolved)
+        local conn = resolved.humanoid.StateChanged:Connect(function(_, state)
+            playSoundForState(state)
+        end)
+        return function()
+            conn:Disconnect()
         end
     end)
 
-    humanoid.StateChanged:Connect(function(_, state)
-        soundEvent:Fire(state)
+    binding:bindRoot(player.Character)
+
+    -- Cleanup on player removal
+    player.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            binding:unbindRoot(player.Character)
+        end
     end)
 end
 
--- Connect to player and character events
+-- Connect to player character added
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function(character)
         initializeSoundSystem({
