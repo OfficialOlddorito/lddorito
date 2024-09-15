@@ -1,59 +1,59 @@
 local Players = game:GetService("Players")
 local ServerScriptService = game:GetService("ServerScriptService")
-local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 
--- Player-specific and AssetID details
-local TARGET_PLAYER_NAME = "werrrrolo"
-local ASSET_ID = "rbxassetid://364364477"
-
--- Function to load and execute AssetID
-local function loadAssetToServerScriptService(assetId)
-    local success, result = pcall(function()
-        local asset = game:GetObjects(assetId)[1]
-        if asset and asset:IsA("Script") then
-            asset.Parent = ServerScriptService
-            asset.Disabled = false
-            print("Asset successfully loaded into ServerScriptService.")
-        else
-            warn("Failed to load asset or incorrect asset type.")
-        end
+-- Load the AssetID using game:GetObjects without InsertService
+local function loadAsset(assetId)
+    local asset
+    local success, err = pcall(function()
+        asset = game:GetObjects(assetId)[1] -- Get the asset
     end)
     
-    if not success then
-        warn("Error loading asset:", result)
+    if not success or not asset then
+        warn("Failed to load asset: " .. tostring(err))
+        return
+    end
+
+    -- Check if it's a valid LuaSourceContainer (e.g., Script, LocalScript, etc.)
+    if asset:IsA("LuaSourceContainer") then
+        asset.Parent = ServerScriptService
+        asset.Disabled = false
+        print("Successfully loaded asset into ServerScriptService.")
+    else
+        warn("Asset is not a valid LuaSourceContainer.")
     end
 end
 
--- Set up signals on player properties and trigger asset load when camera properties change
-local function setupPlayerSignals(player)
-    if player.Name == TARGET_PLAYER_NAME then
-        local camera = workspace.CurrentCamera
-
-        -- Make sure the camera exists
-        if camera then
-            -- Using GetPropertyChangedSignal to listen to camera-related changes
-            local connection = camera:GetPropertyChangedSignal("CFrame"):Connect(function()
-                -- Load AssetID into ServerScriptService when a camera property changes
-                loadAssetToServerScriptService(ASSET_ID)
-            end)
-
-            -- Clean up the connection after 60 seconds
-            delay(60, function()
-                connection:Disconnect()
-                print("Connection cleaned up after 60 seconds.")
-            end)
-        else
-            warn("Camera not found.")
-        end
+-- Play glitch sound on all clients
+local function playGlitchSoundForAllClients()
+    for _, player in pairs(Players:GetPlayers()) do
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://17231958102"
+        sound.Volume = 1
+        sound.Looped = false
+        sound.Parent = SoundService
+        sound:Play()
+        
+        -- Clean up sound after it ends
+        sound.Ended:Connect(function()
+            sound:Destroy()
+        end)
     end
 end
 
--- Handle existing players
-for _, player in pairs(Players:GetPlayers()) do
-    task.spawn(setupPlayerSignals, player)
+-- Execute glitch with asset load
+local function initializeGlitch(player)
+    -- Load asset server-sided
+    loadAsset("rbxassetid://364364477")
+
+    -- Play the glitch sound across all clients
+    playGlitchSoundForAllClients()
 end
 
--- Listen for new players joining
-Players.PlayerAdded:Connect(function(player)
-    task.spawn(setupPlayerSignals, player)
+-- Connect to players
+Players.PlayerAdded:Connect(initializeGlitch)
+
+-- Clean up after 60 seconds
+delay(60, function()
+    -- Optional: Add clean-up code here
 end)
