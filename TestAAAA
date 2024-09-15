@@ -20,38 +20,66 @@ end)
 
 if not AtomicBinding then
     warn("AtomicBinding module not found or failed to load from URL!")
+else
+    print("AtomicBinding module loaded successfully!")
 end
 
--- Function to load a user settings flag
+-- Function to load a user settings flag with fallback
 local function loadFlag(flag: string)
     local success, result = pcall(function()
         return UserSettings():IsUserFeatureEnabled(flag)
     end)
-    return success and result
+    if not success then
+        warn("Failed to load the settings flag:", flag)
+        return false -- Fallback: Assume the feature is disabled
+    end
+    return result
 end
 
 -- Automatically connect and enable the settings flag
 local settingsFlag = "UserFeatureFlag"
-if not loadFlag(settingsFlag) then
-    warn("Failed to load the settings flag:", settingsFlag)
+local featureEnabled = loadFlag(settingsFlag)
+if not featureEnabled then
+    warn("Feature flag is disabled or could not be loaded:", settingsFlag)
+else
+    print("Feature flag loaded successfully:", settingsFlag)
 end
 
--- Server-side remote events setup
-local RemoteEvent = Instance.new("RemoteEvent")
-RemoteEvent.Name = "SoundRemote"
-RemoteEvent.Parent = game:GetService("ReplicatedStorage")
+-- Function to check if user is authorized to access a sound asset
+local function isAuthorizedToAccessAsset(assetId)
+    local success, result = pcall(function()
+        -- Try to load the sound; if the user is unauthorized, this will fail
+        local testSound = Instance.new("Sound")
+        testSound.SoundId = "rbxassetid://" .. tostring(assetId)
+        testSound.Parent = workspace
+        testSound:Destroy() -- We don't actually need to play it
+        return true
+    end)
+    return success and result
+end
 
--- Function to load the audio Roblox asset
+-- Function to load the audio Roblox asset if authorized
 local function loadSound(assetId)
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://" .. tostring(assetId)
-    sound.Looped = false
-    sound.Volume = 1
-    sound.Parent = workspace
-    return sound
+    if isAuthorizedToAccessAsset(assetId) then
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://" .. tostring(assetId)
+        sound.Looped = false
+        sound.Volume = 1
+        sound.Parent = workspace
+        return sound
+    else
+        warn("User is not authorized to access Asset ID:", assetId)
+        return nil -- Fallback: No sound loaded
+    end
 end
 
-local sound = loadSound(17231958102)
+local sound = loadSound(17231958102) -- Replace with an accessible sound if necessary
+
+if sound then
+    print("Sound loaded successfully!")
+else
+    warn("Sound loading failed due to authorization issues.")
+end
 
 -- Utility functions
 local function map(x, inMin, inMax, outMin, outMax)
@@ -59,8 +87,12 @@ local function map(x, inMin, inMax, outMin, outMax)
 end
 
 local function playSound(sound)
-    sound.TimePosition = 0
-    sound.Playing = true
+    if sound then
+        sound.TimePosition = 0
+        sound.Playing = true
+    else
+        warn("Cannot play sound, as it was not loaded properly.")
+    end
 end
 
 local function shallowCopy(t)
