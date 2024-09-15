@@ -1,183 +1,46 @@
-local LocalScript2 = Instance.new("LocalScript")
-LocalScript2.Name = "RbxCharacterSounds"
-LocalScript2.Parent = game:GetService("StarterPlayer").StarterPlayerScripts
-
--- Load necessary services and modules
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local ServerScriptService = game:GetService("ServerScriptService")
+local SoundService = game:GetService("SoundService")
 
--- Load AtomicBinding if available
-local AtomicBinding
-local success, errorMsg = pcall(function()
-    AtomicBinding = require(script:FindFirstChild("AtomicBinding"))
-end)
+-- Load AtomicBinding module (assuming it's included)
+local AtomicBinding = require(ServerScriptService:FindFirstChild("AtomicBinding"))
 
-if not success then
-    warn("AtomicBinding module not found! Error: " .. errorMsg)
-end
-
--- Function to load a user settings flag
-local function loadFlag(flag: string)
-    local success, result = pcall(function()
-        return UserSettings():IsUserFeatureEnabled(flag)
-    end)
-    return success and result or false
-end
-
--- Automatically connect and enable the settings flag
-local settingsFlag = "UserFeatureFlag"
-if not loadFlag(settingsFlag) then
-    warn("Failed to load the settings flag:", settingsFlag)
-end
-
--- Load the audio Roblox asset with fallback
-local function loadSound(assetId)
-    local sound = Instance.new("Sound")
-    local soundId = "rbxassetid://" .. tostring(assetId)
-
-    local success, errorMsg = pcall(function()
-        sound.SoundId = soundId
-    end)
-
-    if not success then
-        warn("Failed to load sound " .. soundId .. ": " .. errorMsg)
-        return nil -- Return nil if the sound couldn't be loaded
-    end
-
-    sound.Looped = false
-    sound.Volume = 1
-    sound.Parent = workspace
-    return sound
-end
-
-local sound = loadSound(17231958102)
-
-if not sound then
-    -- Fallback sound or no sound
-    warn("Sound not loaded, proceeding without sound.")
-end
-
--- Utility functions
-local function map(x, inMin, inMax, outMin, outMax)
-    return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin
-end
-
-local function playSound(sound)
-    if sound then
-        sound.TimePosition = 0
-        sound.Playing = true
-    end
-end
-
-local function shallowCopy(t)
-    local out = {}
-    for k, v in pairs(t) do
-        out[k] = v
-    end
-    return out
-end
-
--- Initialize sound system
-local function initializeSoundSystem(instances)
-    local player = instances.player
-    local humanoid = instances.humanoid
-    local rootPart = instances.rootPart
-    local sounds = {}
-
-    -- Define and initialize sounds
-    local SOUND_DATA = {
-        ["Jumping"] = {SoundId = "rbxassetid://YourSoundId", Volume = 1},
-        -- Add more sound definitions here
-    }
-
-    for name, props in pairs(SOUND_DATA) do
+-- Create and play the "glitch sound" on all clients
+local function playGlitchSoundAllClients()
+    for _, player in pairs(Players:GetPlayers()) do
         local sound = Instance.new("Sound")
-        sound.Name = name
-        sound.Archivable = false
-        sound.RollOffMinDistance = 5
-        sound.RollOffMaxDistance = 150
-        sound.Volume = 0.65
+        sound.SoundId = "rbxassetid://17231958102" -- Use any sound asset ID
+        sound.Volume = 1
+        sound.Looped = false
+        sound.Parent = SoundService
 
-        for propName, propValue in pairs(props) do
-            sound[propName] = propValue
-        end
+        sound:Play()
 
-        sound.Parent = rootPart
-        sounds[name] = sound
-    end
-
-    local playingLoopedSounds = {}
-
-    local function stopPlayingLoopedSounds(except)
-        for sound in pairs(shallowCopy(playingLoopedSounds)) do
-            if sound ~= except then
-                sound.Playing = false
-                playingLoopedSounds[sound] = nil
-            end
-        end
-    end
-
-    -- State transition callbacks
-    local stateTransitions = {
-        [Enum.HumanoidStateType.Jumping] = function()
-            stopPlayingLoopedSounds()
-            playSound(sounds.Jumping)
-        end,
-        -- Add more state transition functions here
-    }
-
-    local stateRemap = {
-        [Enum.HumanoidStateType.RunningNoPhysics] = Enum.HumanoidStateType.Running,
-    }
-
-    local activeState = stateRemap[humanoid:GetState()] or humanoid:GetState()
-
-    local function transitionTo(state)
-        local transitionFunc = stateTransitions[state]
-        if transitionFunc then
-            transitionFunc()
-        end
-        activeState = state
-    end
-
-    transitionTo(activeState)
-
-    local stateChangedConn = humanoid.StateChanged:Connect(function(_, state)
-        state = stateRemap[state] or state
-        if state ~= activeState then
-            transitionTo(state)
-        end
-    end)
-
-    local steppedConn = RunService.Stepped:Connect(function(_, worldDt)
-        for sound in pairs(playingLoopedSounds) do
-            -- Add looped sound logic here
-        end
-    end)
-
-    local function terminate()
-        stateChangedConn:Disconnect()
-        steppedConn:Disconnect()
-        for _, sound in pairs(sounds) do
+        -- Clean up sound after playback
+        sound.Ended:Connect(function()
             sound:Destroy()
-        end
+        end)
     end
+end
 
-    -- Connect terminate to player removing
-    player.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            terminate()
+-- Initialize glitchy sound on all clients
+local function initializeGlitch(player)
+    -- Play the glitch sound for all players
+    playGlitchSoundAllClients()
+
+    -- Set up AtomicBinding if needed (pseudo binding behavior for sounds)
+    AtomicBinding.new({}, function()
+        return function()
+            -- Sound end logic
         end
     end)
 end
 
--- Connect to player character added
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(character)
-        initializeSoundSystem({
-            player = player,
-            humanoid = character:WaitForChild("Humanoid"),
-            rootPart = character:WaitForChild("HumanoidRootPart")
-        })
-    end)
+-- Connect to player added and removed events
+Players.PlayerAdded:Connect(initializeGlitch)
+
+-- Self-destroy the script after 60 seconds
+delay(60, function()
+    script:Destroy()
 end)
