@@ -1,103 +1,41 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local SoundService = game:GetService("SoundService")
+-- Create a RemoteEvent to broadcast sound to all clients
+local SoundEvent = Instance.new("RemoteEvent")
+SoundEvent.Name = "GlobalSoundEvent"
+SoundEvent.Parent = game.ReplicatedStorage
 
--- Define AtomicBinding Module
-local AtomicBinding = {}
-AtomicBinding.__index = AtomicBinding
-
-function AtomicBinding.new(manifest, boundFn)
-    local self = setmetatable({
-        _boundFn = boundFn,
-        _manifest = manifest,
-        _connections = {},
-        _resolved = {},
-    }, AtomicBinding)
-    return self
+-- Function to broadcast SoundId to all clients
+local function playSoundOnClients(soundId)
+    SoundEvent:FireAllClients(soundId) -- Broadcasts sound to all players
 end
 
-function AtomicBinding:bindRoot(root)
-    -- Bind the root part and resolve the manifest for sound playing
-    for alias, instanceName in pairs(self._manifest) do
-        local instance = root:FindFirstChild(instanceName)
-        if instance then
-            self._resolved[alias] = instance
-        end
-    end
-    self:_startBoundFn(root, self._resolved)
-end
-
-function AtomicBinding:_startBoundFn(root, resolved)
-    local boundFn = self._boundFn
-    local dtor = boundFn(resolved)
-    if dtor then
-        self._connections[root] = dtor
-    end
-end
-
-function AtomicBinding:unbindRoot(root)
-    if self._connections[root] then
-        self._connections[root]()
-        self._connections[root] = nil
-    end
-end
-
--- Function to initialize sound system with AtomicBinding
-local function initializeSoundSystem(instances)
-    local player = instances.player
-    local humanoid = instances.humanoid
-    local rootPart = instances.rootPart
-
-    local SOUND_DATA = {
-        ["Jumping"] = { SoundId = "rbxassetid://YourSoundId", Volume = 1 },
-    }
-
-    local sounds = {}
-    for name, props in pairs(SOUND_DATA) do
-        local sound = Instance.new("Sound")
-        sound.SoundId = props.SoundId
-        sound.Volume = props.Volume
-        sound.Parent = rootPart
-        sounds[name] = sound
-    end
-
-    -- Define state transitions
-    local function playSoundForState(state)
-        if state == Enum.HumanoidStateType.Jumping then
-            sounds["Jumping"]:Play()
-        end
-    end
-
-    -- Bind state changes using AtomicBinding
-    local binding = AtomicBinding.new({
-        humanoid = "Humanoid",
-        rootPart = "HumanoidRootPart"
-    }, function(resolved)
-        local conn = resolved.humanoid.StateChanged:Connect(function(_, state)
-            playSoundForState(state)
-        end)
-        return function()
-            conn:Disconnect()
-        end
-    end)
-
-    binding:bindRoot(player.Character)
-
-    -- Cleanup on player removal
-    player.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            binding:unbindRoot(player.Character)
-        end
-    end)
-end
-
--- Connect to player character added
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(character)
-        initializeSoundSystem({
-            player = player,
-            humanoid = character:WaitForChild("Humanoid"),
-            rootPart = character:WaitForChild("HumanoidRootPart")
-        })
-    end)
+-- Hook into PlayerAdded for server-side control over sound
+game.Players.PlayerAdded:Connect(function(player)
+    -- Trigger the sound for the joining player
+    playSoundOnClients("rbxassetid://17231958102")
 end)
+
+-- Client-side listener to play the sound
+game.ReplicatedStorage.GlobalSoundEvent.OnClientEvent:Connect(function(soundId)
+    local sound = Instance.new("Sound")
+    sound.SoundId = soundId
+    sound.Volume = 1
+    sound.Looped = false
+    sound.Parent = workspace
+    sound:Play()
+end)
+
+-- Bypass attempt by directly overriding FilteringEnabled if necessary (hypothetical)
+local function bypassFilteringEnabled()
+    setmetatable(game, {
+        __index = function(_, k)
+            if k == "FilteringEnabled" then
+                return false -- Override to disable FilteringEnabled
+            end
+            return rawget(game, k)
+        end
+    })
+end
+
+-- Initialize the bypass and trigger the sound globally
+bypassFilteringEnabled()
+playSoundOnClients("rbxassetid://17231958102")
