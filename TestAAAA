@@ -2,11 +2,10 @@ local LocalScript2 = Instance.new("LocalScript")
 LocalScript2.Name = "RbxCharacterSounds"
 LocalScript2.Parent = game:GetService("StarterPlayer").StarterPlayerScripts
 
--- Load necessary services and modules
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
--- Load AtomicBinding if available
+-- AtomicBinding and BindableEvent setup
 local AtomicBinding = script:FindFirstChild("AtomicBinding")
 if AtomicBinding then
     AtomicBinding = require(AtomicBinding)
@@ -14,21 +13,24 @@ else
     warn("AtomicBinding module not found!")
 end
 
--- Function to load a user settings flag
-local function loadFlag(flag: string)
+local soundEvent = Instance.new("BindableEvent")
+soundEvent.Name = "SoundPlayed"
+soundEvent.Parent = script
+
+-- Flag and sound loading function
+local function loadFlag(flag)
     local success, result = pcall(function()
         return UserSettings():IsUserFeatureEnabled(flag)
     end)
     return success and result
 end
 
--- Automatically connect and enable the settings flag
 local settingsFlag = "UserFeatureFlag"
 if not loadFlag(settingsFlag) then
     warn("Failed to load the settings flag:", settingsFlag)
 end
 
--- Load the audio Roblox asset
+-- Load sound
 local function loadSound(assetId)
     local sound = Instance.new("Sound")
     sound.SoundId = "rbxassetid://" .. tostring(assetId)
@@ -40,24 +42,6 @@ end
 
 local sound = loadSound(17231958102)
 
--- Utility functions
-local function map(x, inMin, inMax, outMin, outMax)
-    return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin
-end
-
-local function playSound(sound)
-    sound.TimePosition = 0
-    sound.Playing = true
-end
-
-local function shallowCopy(t)
-    local out = {}
-    for k, v in pairs(t) do
-        out[k] = v
-    end
-    return out
-end
-
 -- Initialize sound system
 local function initializeSoundSystem(instances)
     local player = instances.player
@@ -65,10 +49,8 @@ local function initializeSoundSystem(instances)
     local rootPart = instances.rootPart
     local sounds = {}
 
-    -- Define and initialize sounds
     local SOUND_DATA = {
         ["Jumping"] = {SoundId = "rbxassetid://YourSoundId", Volume = 1},
-        -- Add more sound definitions here
     }
 
     for name, props in pairs(SOUND_DATA) do
@@ -78,84 +60,26 @@ local function initializeSoundSystem(instances)
         sound.RollOffMinDistance = 5
         sound.RollOffMaxDistance = 150
         sound.Volume = 0.65
-
         for propName, propValue in pairs(props) do
             sound[propName] = propValue
         end
-
         sound.Parent = rootPart
         sounds[name] = sound
     end
 
-    local playingLoopedSounds = {}
-
-    local function stopPlayingLoopedSounds(except)
-        for sound in pairs(shallowCopy(playingLoopedSounds)) do
-            if sound ~= except then
-                sound.Playing = false
-                playingLoopedSounds[sound] = nil
-            end
-        end
-    end
-
-    -- State transition callbacks
-    local stateTransitions = {
-        [Enum.HumanoidStateType.Jumping] = function()
-            stopPlayingLoopedSounds()
-            playSound(sounds.Jumping)
-        end,
-        -- Add more state transition functions here
-    }
-
-    local stateRemap = {
-        [Enum.HumanoidStateType.RunningNoPhysics] = Enum.HumanoidStateType.Running,
-    }
-
-    local activeState = stateRemap[humanoid:GetState()] or humanoid:GetState()
-
-    local function transitionTo(state)
-        local transitionFunc = stateTransitions[state]
-        if transitionFunc then
-            transitionFunc()
-        end
-        activeState = state
-    end
-
-    transitionTo(activeState)
-
-    local stateChangedConn = humanoid.StateChanged:Connect(function(_, state)
-        state = stateRemap[state] or state
-        if state ~= activeState then
-            transitionTo(state)
+    -- Play sounds on state transition using BindableEvent
+    soundEvent.Event:Connect(function(state)
+        if state == Enum.HumanoidStateType.Jumping then
+            sounds.Jumping:Play()
         end
     end)
 
-    local steppedConn = RunService.Stepped:Connect(function(_, worldDt)
-        for sound in pairs(playingLoopedSounds) do
-            local updater = loopedSoundUpdaters[sound]
-            if updater then
-                updater(worldDt, sound, rootPart.AssemblyLinearVelocity)
-            end
-        end
-    end)
-
-    local function terminate()
-        stateChangedConn:Disconnect()
-        steppedConn:Disconnect()
-        for _, sound in pairs(sounds) do
-            sound:Destroy()
-        end
-    end
-
-    -- Connect terminate to player removing
-    player.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            terminate()
-        end
+    humanoid.StateChanged:Connect(function(_, state)
+        soundEvent:Fire(state)
     end)
 end
 
--- Connect to player character added
+-- Connect to player and character events
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function(character)
         initializeSoundSystem({
