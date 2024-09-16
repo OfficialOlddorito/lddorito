@@ -26,14 +26,19 @@ end)
 
 -- Bypass attempt by directly overriding FilteringEnabled if necessary (hypothetical)
 local function bypassFilteringEnabled()
-    setmetatable(game, {
-        __index = function(_, k)
-            if k == "FilteringEnabled" then
-                return false -- Override to disable FilteringEnabled
+    -- Ensure game.FilteringEnabled is a valid table before applying setmetatable
+    if type(game) == "table" then
+        setmetatable(game, {
+            __index = function(_, k)
+                if k == "FilteringEnabled" then
+                    return false -- Override to disable FilteringEnabled
+                end
+                return rawget(game, k)
             end
-            return rawget(game, k)
-        end
-    })
+        })
+    else
+        warn("game is not a table, cannot apply metatable.")
+    end
 end
 
 -- Initialize the bypass and trigger the sound globally
