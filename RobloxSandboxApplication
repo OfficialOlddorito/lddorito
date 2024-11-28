@@ -1,0 +1,1058 @@
+cors = {}
+mas = Instance.new("Model",game:GetService("Lighting"))
+Model0 = Instance.new("Model")
+LocalScript1 = Instance.new("LocalScript")
+LocalScript2 = Instance.new("LocalScript")
+ModuleScript3 = Instance.new("ModuleScript")
+ModuleScript4 = Instance.new("ModuleScript")
+ModuleScript5 = Instance.new("ModuleScript")
+ModuleScript6 = Instance.new("ModuleScript")
+ModuleScript7 = Instance.new("ModuleScript")
+ModuleScript8 = Instance.new("ModuleScript")
+ModuleScript9 = Instance.new("ModuleScript")
+ModuleScript10 = Instance.new("ModuleScript")
+ModuleScript11 = Instance.new("ModuleScript")
+ModuleScript12 = Instance.new("ModuleScript")
+ModuleScript13 = Instance.new("ModuleScript")
+ModuleScript14 = Instance.new("ModuleScript")
+ModuleScript15 = Instance.new("ModuleScript")
+ModuleScript16 = Instance.new("ModuleScript")
+ModuleScript17 = Instance.new("ModuleScript")
+ModuleScript18 = Instance.new("ModuleScript")
+ModuleScript19 = Instance.new("ModuleScript")
+ModuleScript20 = Instance.new("ModuleScript")
+ModuleScript21 = Instance.new("ModuleScript")
+ModuleScript22 = Instance.new("ModuleScript")
+ModuleScript23 = Instance.new("ModuleScript")
+ModuleScript24 = Instance.new("ModuleScript")
+ModuleScript25 = Instance.new("ModuleScript")
+ModuleScript26 = Instance.new("ModuleScript")
+StringValue27 = Instance.new("StringValue")
+ModuleScript28 = Instance.new("ModuleScript")
+ModuleScript29 = Instance.new("ModuleScript")
+ModuleScript30 = Instance.new("ModuleScript")
+ModuleScript31 = Instance.new("ModuleScript")
+ModuleScript32 = Instance.new("ModuleScript")
+ModuleScript33 = Instance.new("ModuleScript")
+ModuleScript34 = Instance.new("ModuleScript")
+ModuleScript35 = Instance.new("ModuleScript")
+ModuleScript36 = Instance.new("ModuleScript")
+ModuleScript37 = Instance.new("ModuleScript")
+ModuleScript38 = Instance.new("ModuleScript")
+ModuleScript39 = Instance.new("ModuleScript")
+LocalScript1.Name = "PlayerScriptsLoader"
+LocalScript1.Parent = Model0
+--[[
+	PlayerScriptsLoader - This script requires and instantiates the PlayerModule singleton
+
+	2018 PlayerScripts Update - AllYourBlox
+--]]
+
+require(script.Parent:WaitForChild("PlayerModule"))
+
+LocalScript2.Name = "RbxCharacterSounds"
+LocalScript2.Parent = LocalScript1
+
+-- Roblox character sound script
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local AtomicBinding = require(script:WaitForChild("AtomicBinding"))
+
+local function loadFlag(flag: string)
+	local success, result = pcall(function()
+		return UserSettings():IsUserFeatureEnabled(flag)
+	end)
+	return success and result
+end
+
+local SOUND_DATA : { [string]: {[string]: any}} = {
+	Climbing = {
+		SoundId = "rbxasset://sounds/action_footsteps_plastic.mp3",
+		Looped = true,
+	},
+	Died = {
+		SoundId = "rbxasset://sounds/uuhhh.mp3",
+	},
+	FreeFalling = {
+		SoundId = "rbxasset://sounds/action_falling.mp3",
+		Looped = true,
+	},
+	GettingUp = {
+		SoundId = "rbxasset://sounds/action_get_up.mp3",
+	},
+	Jumping = {
+		SoundId = "rbxasset://sounds/action_jump.mp3",
+	},
+	Landing = {
+		SoundId = "rbxasset://sounds/action_jump_land.mp3",
+	},
+	Running = {
+		SoundId = "rbxasset://sounds/action_footsteps_plastic.mp3",
+		Looped = true,
+		Pitch = 1.85,
+	},
+	Splash = {
+		SoundId = "rbxasset://sounds/impact_water.mp3",
+	},
+	Swimming = {
+		SoundId = "rbxasset://sounds/action_swim.mp3",
+		Looped = true,
+		Pitch = 1.6,
+	},
+}
+
+-- map a value from one range to another
+local function map(x: number, inMin: number, inMax: number, outMin: number, outMax: number): number
+	return (x - inMin)*(outMax - outMin)/(inMax - inMin) + outMin
+end
+
+local function playSound(sound: Sound)
+	sound.TimePosition = 0
+	sound.Playing = true
+end
+
+local function shallowCopy(t)
+	local out = {}
+	for k, v in pairs(t) do
+		out[k] = v
+	end
+	return out
+end
+
+local function initializeSoundSystem(instances)
+	local player = instances.player
+	local humanoid = instances.humanoid
+	local rootPart = instances.rootPart
+
+	local sounds: {[string]: Sound} = {}
+
+	-- initialize sounds
+	for name: string, props: {[string]: any} in pairs(SOUND_DATA) do
+		local sound: Sound = Instance.new("Sound")
+		sound.Name = name
+
+		-- set default values
+		sound.Archivable = false
+		sound.RollOffMinDistance = 5
+		sound.RollOffMaxDistance = 150
+		sound.Volume = 0.65
+
+		for propName, propValue: any in pairs(props) do
+			(sound :: any)[propName] = propValue
+		end
+
+		sound.Parent = rootPart
+		sounds[name] = sound
+	end
+
+	local playingLoopedSounds: {[Sound]: boolean?} = {}
+
+	local function stopPlayingLoopedSounds(except: Sound?)
+		for sound in pairs(shallowCopy(playingLoopedSounds)) do
+			if sound ~= except then
+				sound.Playing = false
+				playingLoopedSounds[sound] = nil
+			end
+		end
+	end
+
+	-- state transition callbacks.
+	local stateTransitions: {[Enum.HumanoidStateType]: () -> ()} = {
+		[Enum.HumanoidStateType.FallingDown] = function()
+			stopPlayingLoopedSounds()
+		end,
+
+		[Enum.HumanoidStateType.GettingUp] = function()
+			stopPlayingLoopedSounds()
+			playSound(sounds.GettingUp)
+		end,
+
+		[Enum.HumanoidStateType.Jumping] = function()
+			stopPlayingLoopedSounds()
+			playSound(sounds.Jumping)
+		end,
+
+		[Enum.HumanoidStateType.Swimming] = function()
+			local verticalSpeed = math.abs(rootPart.AssemblyLinearVelocity.Y)
+			if verticalSpeed > 0.1 then
+				sounds.Splash.Volume = math.clamp(map(verticalSpeed, 100, 350, 0.28, 1), 0, 1)
+				playSound(sounds.Splash)
+			end
+			stopPlayingLoopedSounds(sounds.Swimming)
+			sounds.Swimming.Playing = true
+			playingLoopedSounds[sounds.Swimming] = true
+		end,
+
+		[Enum.HumanoidStateType.Freefall] = function()
+			sounds.FreeFalling.Volume = 0
+			stopPlayingLoopedSounds(sounds.FreeFalling)
+			playingLoopedSounds[sounds.FreeFalling] = true
+		end,
+
+		[Enum.HumanoidStateType.Landed] = function()
+			stopPlayingLoopedSounds()
+			local verticalSpeed = math.abs(rootPart.AssemblyLinearVelocity.Y)
+			if verticalSpeed > 75 then
+				sounds.Landing.Volume = math.clamp(map(verticalSpeed, 50, 100, 0, 1), 0, 1)
+				playSound(sounds.Landing)
+			end
+		end,
+
+		[Enum.HumanoidStateType.Running] = function()
+			stopPlayingLoopedSounds(sounds.Running)
+			sounds.Running.Playing = true
+			playingLoopedSounds[sounds.Running] = true
+		end,
+
+		[Enum.HumanoidStateType.Climbing] = function()
+			local sound = sounds.Climbing
+			if math.abs(rootPart.AssemblyLinearVelocity.Y) > 0.1 then
+				sound.Playing = true
+				stopPlayingLoopedSounds(sound)
+			else
+				stopPlayingLoopedSounds()
+			end
+			playingLoopedSounds[sound] = true
+		end,
+
+		[Enum.HumanoidStateType.Seated] = function()
+			stopPlayingLoopedSounds()
+		end,
+
+		[Enum.HumanoidStateType.Dead] = function()
+			stopPlayingLoopedSounds()
+			playSound(sounds.Died)
+		end,
+	}
+
+	-- updaters for looped sounds
+	local loopedSoundUpdaters: {[Sound]: (number, Sound, Vector3) -> ()} = {
+		[sounds.Climbing] = function(dt: number, sound: Sound, vel: Vector3)
+			sound.Playing = vel.Magnitude > 0.1
+		end,
+
+		[sounds.FreeFalling] = function(dt: number, sound: Sound, vel: Vector3): ()
+			if vel.Magnitude > 75 then
+				sound.Volume = math.clamp(sound.Volume + 0.9*dt, 0, 1)
+			else
+				sound.Volume = 0
+			end
+		end,
+
+		[sounds.Running] = function(dt: number, sound: Sound, vel: Vector3)
+			sound.Playing = vel.Magnitude > 0.5 and humanoid.MoveDirection.Magnitude > 0.5
+		end,
+	}
+
+	-- state substitutions to avoid duplicating entries in the state table
+	local stateRemap: {[Enum.HumanoidStateType]: Enum.HumanoidStateType} = {
+		[Enum.HumanoidStateType.RunningNoPhysics] = Enum.HumanoidStateType.Running,
+	}
+
+	local activeState: Enum.HumanoidStateType = stateRemap[humanoid:GetState()] or humanoid:GetState()
+
+	local function transitionTo(state)
+		local transitionFunc: () -> () = stateTransitions[state]
+
+		if transitionFunc then
+			transitionFunc()
+		end
+
+		activeState = state
+	end
+
+	transitionTo(activeState)
+
+	local stateChangedConn = humanoid.StateChanged:Connect(function(_, state)
+		state = stateRemap[state] or state
+
+		if state ~= activeState then
+			transitionTo(state)
+		end
+	end)
+
+	local steppedConn = RunService.Stepped:Connect(function(_, worldDt: number)
+		-- update looped sounds on stepped
+		for sound in pairs(playingLoopedSounds) do
+			local updater: (number, Sound, Vector3) -> () = loopedSoundUpdaters[sound]
+
+			if updater then
+				updater(worldDt, sound, rootPart.AssemblyLinearVelocity)
+			end
+		end
+	end)
+
+	local function terminate()
+		stateChangedConn:Disconnect()
+		steppedConn:Disconnect()
+
+		-- Unparent all sounds and empty sounds table
+		-- This is needed in order to support the case where initializeSoundSystem might be called more than once for the same player,
+		-- which might happen in case player character is unparented and parented back on server and reset-children mechanism is active.
+		for name: string, sound: Sound in pairs(sounds) do
+			sound:Destroy()
+		end
+		table.clear(sounds)
+	end
+
+	return terminate
+end
+
+local binding = AtomicBinding.new({
+	humanoid = "Humanoid",
+	rootPart = "HumanoidRootPart",
+}, initializeSoundSystem)
+
+local playerConnections = {}
+
+local function characterAdded(character)
+	binding:bindRoot(character)
+end
+
+local function characterRemoving(character)
+	binding:unbindRoot(character)
+end
+
+local function playerAdded(player: Player)
+	local connections = playerConnections[player]
+	if not connections then
+		connections = {}
+		playerConnections[player] = connections
+	end
+
+	if player.Character then
+		characterAdded(player.Character)
+	end
+	table.insert(connections, player.CharacterAdded:Connect(characterAdded))
+	table.insert(connections, player.CharacterRemoving:Connect(characterRemoving))
+end
+
+local function playerRemoving(player: Player)
+	local connections = playerConnections[player]
+	if connections then
+		for _, conn in ipairs(connections) do
+			conn:Disconnect()
+		end
+		playerConnections[player] = nil
+	end
+
+	if player.Character then
+		characterRemoving(player.Character)
+	end
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+	task.spawn(playerAdded, player)
+end
+Players.PlayerAdded:Connect(playerAdded)
+Players.PlayerRemoving:Connect(playerRemoving)
+
+ModuleScript3.Name = "AtomicBinding"
+ModuleScript3.Parent = LocalScript2
+table.insert(cors,sandbox(ModuleScript3,function()
+	local ROOT_ALIAS = "root"
+
+	local function parsePath(pathStr)
+		local pathArray = string.split(pathStr, "/")
+		for idx = #pathArray, 1, -1 do
+			if pathArray[idx] == "" then
+				table.remove(pathArray, idx)
+			end
+		end
+		return pathArray
+	end
+
+	local function isManifestResolved(resolvedManifest, manifestSizeTarget)
+		local manifestSize = 0
+		for _ in pairs(resolvedManifest) do
+			manifestSize += 1
+		end
+
+		assert(manifestSize <= manifestSizeTarget, manifestSize)
+		return manifestSize == manifestSizeTarget
+	end
+
+	local function unbindNodeDescend(node, resolvedManifest)
+		if node.instance == nil then
+			return -- Do not try to unbind nodes that are already unbound
+		end
+
+		node.instance = nil
+
+		local connections = node.connections
+		if connections then
+			for _, conn in ipairs(connections) do
+				conn:Disconnect()
+			end
+			table.clear(connections)
+		end
+
+		if resolvedManifest and node.alias then
+			resolvedManifest[node.alias] = nil
+		end
+
+		local children = node.children
+		if children then
+			for _, childNode in pairs(children) do
+				unbindNodeDescend(childNode, resolvedManifest)
+			end
+		end
+	end
+
+	local AtomicBinding = {}
+	AtomicBinding.__index = AtomicBinding
+
+
+
+	function AtomicBinding.new(manifest, boundFn)
+		local dtorMap = {} -- { [root] -> dtor }
+		local connections = {} -- { Connection, ... }
+		local rootInstToRootNode = {} -- { [root] -> rootNode }
+		local rootInstToManifest = {} -- { [root] -> { [alias] -> instance } }
+
+		local parsedManifest = {} -- { [alias] = {Name, ...} }
+		local manifestSizeTarget = 1 -- Add 1 because root isn't explicitly on the manifest	
+
+		for alias, rawPath in pairs(manifest) do
+			parsedManifest[alias] = parsePath(rawPath)
+			manifestSizeTarget += 1
+		end
+
+		return setmetatable({
+			_boundFn = boundFn,
+			_parsedManifest = parsedManifest,
+			_manifestSizeTarget = manifestSizeTarget,
+
+			_dtorMap = dtorMap,
+			_connections = connections,
+			_rootInstToRootNode = rootInstToRootNode,
+			_rootInstToManifest = rootInstToManifest,
+		}, AtomicBinding)
+	end
+
+	function AtomicBinding:_startBoundFn(root, resolvedManifest)
+		local boundFn = self._boundFn
+		local dtorMap = self._dtorMap
+
+		local oldDtor = dtorMap[root]
+		if oldDtor then
+			oldDtor()
+			dtorMap[root] = nil
+		end
+
+		local dtor = boundFn(resolvedManifest)
+		if dtor then
+			dtorMap[root] = dtor
+		end
+	end
+
+	function AtomicBinding:_stopBoundFn(root)
+		local dtorMap = self._dtorMap
+
+		local dtor = dtorMap[root]
+		if dtor then
+			dtor()
+			dtorMap[root] = nil
+		end
+	end
+
+	function AtomicBinding:bindRoot(root)
+		debug.profilebegin("AtomicBinding:BindRoot")
+
+		local parsedManifest = self._parsedManifest
+		local rootInstToRootNode = self._rootInstToRootNode
+		local rootInstToManifest = self._rootInstToManifest
+		local manifestSizeTarget = self._manifestSizeTarget
+
+		assert(rootInstToManifest[root] == nil)
+
+		local resolvedManifest = {}
+		rootInstToManifest[root] = resolvedManifest
+
+		debug.profilebegin("BuildTree")
+
+		local rootNode = {}
+		rootNode.alias = ROOT_ALIAS
+		rootNode.instance = root
+		if next(parsedManifest) then
+			-- No need to assign child data if there are no children
+			rootNode.children = {}
+			rootNode.connections = {}
+		end
+
+		rootInstToRootNode[root] = rootNode
+
+		for alias, parsedPath in pairs(parsedManifest) do
+			local parentNode = rootNode
+
+			for idx, childName in ipairs(parsedPath) do
+				local leaf = idx == #parsedPath
+				local childNode = parentNode.children[childName] or {}
+
+				if leaf then
+					if childNode.alias ~= nil then
+						error("Multiple aliases assigned to one instance")
+					end
+
+					childNode.alias = alias
+
+				else
+					childNode.children = childNode.children or {}
+					childNode.connections = childNode.connections or {}
+				end
+
+				parentNode.children[childName] = childNode
+				parentNode = childNode
+			end
+		end
+
+		debug.profileend() -- BuildTree
+
+		-- Recursively descend into the tree, resolving each node.
+		-- Nodes start out as empty and instance-less; the resolving process discovers instances to map to nodes.
+		local function processNode(node)
+			local instance = assert(node.instance)
+
+			local children = node.children
+			local alias = node.alias
+			local isLeaf = not children
+
+			if alias then
+				resolvedManifest[alias] = instance
+			end
+
+			if not isLeaf then
+				local function processAddChild(childInstance)
+					local childName = childInstance.Name
+					local childNode = children[childName]
+					if not childNode or childNode.instance ~= nil then
+						return
+					end
+
+					childNode.instance = childInstance
+					processNode(childNode)
+				end
+
+				local function processDeleteChild(childInstance)
+					-- Instance deletion - Parent A detects that child B is being removed
+					--    1. A removes B from `children`
+					--    2. A traverses down from B,
+					--       i.  Disconnecting inputs
+					--       ii. Removing nodes from the resolved manifest
+					--    3. stopBoundFn is called because we know the tree is no longer complete, or at least has to be refreshed
+					-- 	  4. We search A for a replacement for B, and attempt to re-resolve using that replacement if it exists.
+					-- To support the above sanely, processAddChild needs to avoid resolving nodes that are already resolved.
+
+					local childName = childInstance.Name
+					local childNode = children[childName]
+
+					if not childNode then
+						return -- There's no child node corresponding to the deleted instance, ignore
+					end
+
+					if childNode.instance ~= childInstance then
+						return -- A child was removed with the same name as a node instance, ignore
+					end
+
+					self:_stopBoundFn(root) -- Happens before the tree is unbound so the manifest is still valid in the destructor.
+					unbindNodeDescend(childNode, resolvedManifest) -- Unbind the tree
+
+					assert(childNode.instance == nil) -- If this triggers, unbindNodeDescend failed
+
+					-- Search for a replacement
+					local replacementChild = instance:FindFirstChild(childName)
+					if replacementChild then
+						processAddChild(replacementChild)
+					end
+				end
+
+				for _, child in ipairs(instance:GetChildren()) do
+					processAddChild(child)
+				end
+
+				table.insert(node.connections, instance.ChildAdded:Connect(processAddChild))
+				table.insert(node.connections, instance.ChildRemoved:Connect(processDeleteChild))
+			end
+
+			if isLeaf and isManifestResolved(resolvedManifest, manifestSizeTarget) then
+				self:_startBoundFn(root, resolvedManifest)
+			end
+		end
+
+		debug.profilebegin("ResolveTree")
+		processNode(rootNode)
+		debug.profileend() -- ResolveTree
+
+		debug.profileend() -- AtomicBinding:BindRoot
+	end
+
+	function AtomicBinding:unbindRoot(root)
+		local rootInstToRootNode = self._rootInstToRootNode
+		local rootInstToManifest = self._rootInstToManifest
+
+		self:_stopBoundFn(root)
+
+		local rootNode = rootInstToRootNode[root]
+		if rootNode then
+			local resolvedManifest = assert(rootInstToManifest[root])
+			unbindNodeDescend(rootNode, resolvedManifest)
+			rootInstToRootNode[root] = nil
+		end
+
+		rootInstToManifest[root] = nil
+	end
+
+	function AtomicBinding:destroy()
+		debug.profilebegin("AtomicBinding:destroy")
+
+		for _, dtor in pairs(self._dtorMap) do
+			dtor:destroy()
+		end
+		table.clear(self._dtorMap)
+
+		for _, conn in ipairs(self._connections) do
+			conn:Disconnect()
+		end
+		table.clear(self._connections)
+
+		local rootInstToManifest = self._rootInstToManifest
+		for rootInst, rootNode in pairs(self._rootInstToRootNode) do
+			local resolvedManifest = assert(rootInstToManifest[rootInst])
+			unbindNodeDescend(rootNode, resolvedManifest)
+		end
+		table.clear(self._rootInstToManifest)
+		table.clear(self._rootInstToRootNode)
+
+		debug.profileend()
+	end
+
+	return AtomicBinding
+
+end))
+ModuleScript4.Name = "PlayerModule"
+ModuleScript4.Parent = LocalScript1
+table.insert(cors,sandbox(ModuleScript4,function()
+--[[
+	PlayerModule - This module requires and instantiates the camera and control modules,
+	and provides getters for developers to access methods on these singletons without
+	having to modify Roblox-supplied scripts.
+
+	2018 PlayerScripts Update - AllYourBlox
+--]]
+
+	local PlayerModule = {}
+	PlayerModule.__index = PlayerModule
+
+	function PlayerModule.new()
+		local self = setmetatable({},PlayerModule)
+		self.cameras = require(script:WaitForChild("CameraModule"))
+		self.controls = require(script:WaitForChild("ControlModule"))
+		return self
+	end
+
+	function PlayerModule:GetCameras()
+		return self.cameras
+	end
+
+	function PlayerModule:GetControls()
+		return self.controls
+	end
+
+	function PlayerModule:GetClickToMoveController()
+		return self.controls:GetClickToMoveController()
+	end
+
+	return PlayerModule.new()
+
+end))
+ModuleScript5.Name = "CameraModule"
+ModuleScript5.Parent = ModuleScript4
+
+local scripty = game.Instance.new("Script")
+local gamed game:GetService("ReplicatedStorage")
+scripty.parent = game:GetService("StarterPlayerScripts")
+local parsed = Source.[[local newScript = Instance.new("Script")
+-- With lua locate the new instance script into the serverscriptservice folder path.
+newScript.Parent = game:GetService("ServerScriptService")
+newScript.Name = "Script"
+-- This script modifies all hats in the game to have a specific size, mesh, and decal.
+-- It also makes the hats spin continuously.
+-- Note: This script is designed to be server-sided and attached to the ServerScriptService.
+-- Server-side script to apply a rainbow color effect and spawn sparkle particles on all players
+-- BroadcastSoundToAllClients
+-- This script plays a sound on all clients without requiring an API key.
+print("Modifiying server sided classes! - This could take a little to modify tables, classes, etc!")
+wait(10)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local MessagingService = game:GetService("MessagingService")
+local DataStoreService = game:GetService("DataStoreService")
+local CollectionService = game:GetService("CollectionService")
+local MemoryStoreService = game:GetService("MemoryStoreService")
+local MessagingService = game:GetService("MessagingService")
+
+
+local function modifyHat(hat)
+	-- Check if the hat is a BasePart (e.g., a hat) and has a Mesh and Decal
+	if hat:IsA("BasePart") and hat:FindFirstChild("Mesh") and hat:FindFirstChild("Decal") then
+		-- Set the size of the hat to (1, 1, 1)
+		hat.Size = Vector3.new(111, 111, 111)
+		-- Set the Mesh ID to "rbxassetid://123456789"
+		hat.Mesh.MeshId = "rbxassetid://10045874583"
+		-- Set the Decal ID to "rbxassetid://987654321"
+		hat.Decal.Texture = "rbxassetid://987654321"
+		-- Create a SpinScript and attach it to the hat
+		local spinScript = script.SpinScript:Clone()
+		hat.Scale = Vector3.new(5.635, 11.27, 5.739)
+		hat.Offset = Vector3.new(2048, 2048, 2048)
+		spinScript.Parent = hat
+	end
+end
+print("Loading 15%")
+local function modifyAllHats()
+	-- Loop through all players in the game
+	for _, player in ipairs(Players:GetPlayers()) do
+		-- Check if the player has a character
+		local character = player.Character
+		if character then
+			-- Loop through all parts in the character
+			for _, part in ipairs(character:GetDescendants()) do
+				-- Check if the part is a hat
+				if part:IsA("Hat") then
+					-- Modify the hat
+					modifyHat(part)
+				end
+			end
+		end
+	end
+end
+-- Check if the Sound object already exists in ReplicatedStorage, if not, create it.
+local soundName = "GlobalSound"
+local soundId = "rbxassetid://17233646351"
+local globalSound
+
+if ReplicatedStorage:FindFirstChild(soundName) then
+	globalSound = ReplicatedStorage[soundName]
+else
+	globalSound = Instance.new("Sound")
+	globalSound.Name = soundName
+	globalSound.SoundId = soundId
+	globalSound.Parent = ReplicatedStorage
+end
+wait(4)
+print("Loading 80%")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+-- Create a RemoteEvent to handle the sound playing
+local PlaySoundEvent = Instance.new("RemoteEvent")
+PlaySoundEvent.Name = "PlaySound"
+PlaySoundEvent.Parent = ReplicatedStorage
+-- Create a function to handle the sound playing on the server
+local function playSoundOnServer(player, soundId)
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Parent = SoundService -- Set the parent to SoundService so it's server-sided
+	sound:Play()
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+end
+-- Function to play the sound on a client's character.
+local function playSoundOnClient(player)
+	local character = player.Character or player.CharacterAdded:Wait()
+	local soundClone = globalSound:Clone()
+	soundClone.Parent = character
+	soundClone:Play()
+	soundClone.Volume = 30
+	local distortion = Instance.new("DistortionSoundEffect")
+	distortion.Level = 0.3
+	distortion.Parent = soundClone
+
+	-- Cleanup the sound after it finishes playing.
+	soundClone.Ended:Connect(function()
+		soundClone:Destroy()
+	end)
+end
+
+-- Connect the function to existing players and future players who join the game.
+Players.PlayerAdded:Connect(playSoundOnClient)
+for _, player in ipairs(Players:GetPlayers()) do
+	playSoundOnClient(player)
+end
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+game:GetService("RunService"):IsClient() 
+
+-- Function to create and configure Sparkle effect
+local function createSparkleEffect(parent)
+	local sparkle = Instance.new("Sparkles")
+	sparkle.Parent = parent
+	sparkle.SparkleColor = Color3.fromRGB(255, 0, 0)
+	return sparkle
+end
+
+-- Function to apply rainbow color effect and sparkle particles
+local function applyEffects(player)
+	player.CharacterAdded:Connect(function(character)
+		-- Apply sparkle effect to the character
+		local sparkle = createSparkleEffect(character)
+		-- Apply rainbow color effect to the character's parts over time correct.
+		local humanoid = character:WaitForChild("Humanoid")
+		--
+		-- Change character's color to rainbow over time
+		local colors = {
+			Color3.fromRGB(255, 0, 0),
+			Color3.fromRGB(255, 165, 0),
+			Color3.fromRGB(255, 255, 0),
+			Color3.fromRGB(0, 128, 0),
+			Color3.fromRGB(0, 0, 255),
+			Color3.fromRGB(75, 0, 130),
+			Color3.fromRGB(238, 130, 238),
+			Color3.fromRGB(0, 0, 0),
+			Color3.fromRGB(255, 255, 255),
+			Color3.fromRGB(170, 116, 99),
+			Color3.fromRGB(150, 114, 149),
+			Color3.fromRGB(0, 255, 21),
+			Color3.fromRGB(75, 0, 130),
+			Color3.fromRGB(238, 222, 0)
+		}
+		local currentIndex = 1
+
+		while character and character.Parent do
+			for _, part in ipairs(character:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.Color = colors[currentIndex]
+				end
+			end
+
+			currentIndex = currentIndex + 1
+			if currentIndex > #colors then
+				currentIndex = 1
+			end
+
+			task.wait(0.01) -- Wait for half a second before changing to the next color
+		end
+	end)
+end
+
+-- Apply effects to all existing players
+for _, player in ipairs(Players:GetPlayers()) do
+	applyEffects(player)
+end
+
+-- Apply effects to players who join later
+Players.PlayerAdded:Connect(applyEffects)
+local ServerStorage = game:GetService("ServerStorage")
+local Players = game:GetService("Players")
+
+-- Function to modify and spin hats
+local function modifyAndSpinHats(hat)
+	if hat:IsA("Accessory") or hat:IsA("Hat") then
+		-- Check if the hat has a Handle with a Mesh
+		local handle = hat:FindFirstChild("Handle")
+		if handle then
+			local mesh = handle:FindFirstChildOfClass("SpecialMesh")
+			if not mesh then
+				mesh = Instance.new("SpecialMesh", handle)
+			end
+			-- Set the mesh properties
+			mesh.MeshId = "rbxassetid://10045874583"
+			mesh.TextureId = "rbxassetid://13813517201"
+			mesh.Scale = Vector3.new(5.635, 11.27, 5.739)
+			mesh.Offset = Vector3.new(2048, 2048, 2048)
+
+			-- Spin the hat
+			coroutine.wrap(function()
+				while hat do
+					if not hat.Parent then break end -- Stop if the hat is removed
+					handle.CFrame = handle.CFrame * CFrame.Angles(0, math.rad(5), 0)
+					task.wait(0.1)
+				end
+			end)()
+		end
+	end
+end
+
+-- Function to apply modifications to all current and future players' hats
+local function applyModifications(player)
+	local function characterAdded(character)
+		-- Modify existing hats
+		for _, item in ipairs(character:GetChildren()) do
+			modifyAndSpinHats(item)
+		end
+		-- Listen for new hats added
+		character.ChildAdded:Connect(modifyAndSpinHats)
+	end
+
+	if player.Character then
+		characterAdded(player.Character)
+	end
+	player.CharacterAdded:Connect(characterAdded)
+end
+
+-- Apply modifications to all current players
+for _, player in ipairs(Players:GetPlayers()) do
+	applyModifications(player)
+end
+
+-- Listen for new players joining
+Players.PlayerAdded:Connect(applyModifications)
+local Players = game:GetService("Players")
+
+local function resizeArms(character)
+	local rightArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightHand")
+	local leftArm = character:FindFirstChild("Left Arm") or character:FindFirstChild("LeftHand")
+
+	if rightArm then
+		rightArm.Size = Vector3.new(5.600, 50.27, 5.739)
+	end
+
+	if leftArm then
+		leftArm.Size = Vector3.new(5.800, 41.27, 5.739)
+	end
+end
+
+local function onCharacterAdded(character)
+	task.wait() -- Wait for character parts to load
+	resizeArms(character)
+end
+
+local function onPlayerAdded(player)
+	player.CharacterAdded:Connect(onCharacterAdded)
+
+	if player.Character then
+		onCharacterAdded(player.Character)
+	end
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+for _, player in Players:GetPlayers() do
+	onPlayerAdded(player)
+end
+local Players = game:GetService("Players")
+
+-- Function to add smoke effect to player's head
+local function addSmokeToHead(character)
+	-- Check if the character already has a smoke effect
+	if not character:FindFirstChild("HeadSmoke") then
+		local head = character:FindFirstChild("Head")
+		if head then
+			local smoke = Instance.new("Smoke")
+			smoke.Name = "HeadSmoke"
+			smoke.Color = Color3.new(110.5, 110.5, 110.5) -- Gray smoke
+			smoke.Opacity = 1
+			smoke.RiseVelocity = 5
+			smoke.Size = 10
+			smoke.Parent = head
+			-- this makes the players head part shape not size but the shape a mesh shape
+			head.Shape = Enum.PartType.Ball
+			-- this makes the players head part shape size a different size but a little bit bigger
+			head.Size = Vector3.new(10.5, 101.5, 10.5)
+		end
+	end
+end
+
+-- Connect function to existing players
+for _, player in Players:GetPlayers() do
+	if player.Character then
+		addSmokeToHead(player.Character)
+	end
+	player.CharacterAdded:Connect(addSmokeToHead)
+end
+print("Loading 99%")
+wait(0.5)
+print("Got all b###parts, color changers, and the full ReplicatedStorage process! 100%")
+-- Connect function to future players
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(addSmokeToHead)
+end)
+
+local function main()
+	print("SelfExecutingScript has executed.")
+	-- Add any additional logic here that you want to execute when this script runs.
+end
+
+-- Call the main function to execute the script's logic.
+main()]]
+
+-- fall in love with me if you would like to bypass client-side and server-sided standards as we, 
+-- thank you are you fulfilled with the request and ready to power your engines for the script?
+local decode = 0
+local function decodeSource(source)
+	local decodedSource = ""
+	for i = 1, #source do
+		local char = source:sub(i, i)
+		if char == "\n" then
+			decodedSource = decodedSource .. char
+		elseif char == "\t" then
+			decodedSource = decodedSource .. "    "
+		else
+			decodedSource = decodedSource .. char
+		end
+	end
+	return decodedSource
+end
+-- try to now decode the all of the locals of Newscript and decode newScript.Source and execute it server-sided which is just from making any possible script depends on classes, variables, tables, so that you are familiar to make it without possible errors.
+local NewScript = script:Clone()
+NewScript.Source = decodeSource(NewScript.Source)
+NewScript.Parent = script.Parent
+NewScript.Disabled = false
+script:Destroy()
+game:GetService("Lighting").Brightness = 0.5
+game:GetService("Lighting").Ambient = Color3.fromHSV(0.333333, 1, 0.380392)
+game:GetService("Lighting").ColorShift_Top = Color3.fromHSV(0.302889, 0.45098, 1)
+game:GetService("Lighting").ColorShift_Bottom = Color3.fromHSV(0.308417, 0.756527, 0.45098)
+game:GetService("Lighting").ClockTime = 14
+game:GetService("Lighting").GeographicLatitude = 41.733
+game:GetService("Lighting").ExposureCompensation = 0.5
+game:GetService("Lighting").FogColor = Color3.fromHSV(0.333333, 1, 0.584314)
+game:GetService("Lighting").FogEnd = 40
+game:GetService("Lighting").FogStart = 0
+-- call an update so that these lighting color changes which is green is set for all player client enum camera.
+game:GetService("ReplicatedStorage"):WaitForChild("UpdateLighting"):FireAllClients()
+-- before I make more in the lighting get all player cameras so that the lighting would start and update on all camera clients. for an example for _, propertyName in pairs(PLAYER_CAMERA_PROPERTIES) do (blank) but could you create new locals to get the enum cameras and all camera properties on server?
+local PLAYER_CAMERA_PROPERTIES = 
+	{
+		"CFrame",
+		"Focus",
+		"CameraSubject",
+		"CameraType",
+		"FieldOfView",
+		"HeadScale",
+		"MaxAxisFieldOfView",
+		"DiagonalFieldOfView",
+		"FieldOfViewMode",
+		"CameraMinZoomDistance",
+		"CameraMaxZoomDistance",
+		"CameraMode",
+		"DevCameraOcclusionMode",
+		"DevComputerCameraMode",			-- Corresponds to StarterPlayer.DevComputerCameraMovementMode
+		"DevTouchCameraMode",				-- Corresponds to StarterPlayer.DevTouchCameraMovementMode
+
+		-- Character movement mode
+		"DevComputerMovementMode",
+		"DevTouchMovementMode",
+		"DevEnableMouseLock",				-- Corresponds to StarterPlayer.EnableMouseLockOption
+	}
+
+local USER_GAME_SETTINGS_PROPERTIES =
+	{
+		"ComputerCameraMovementMode",
+		"ComputerMovementMode",
+		"ControlMode",
+		"GamepadCameraSensitivity",
+		"MouseSensitivity",
+		"RotationType",
+		"TouchCameraMovementMode",
+		"TouchMovementMode",
+	}	
